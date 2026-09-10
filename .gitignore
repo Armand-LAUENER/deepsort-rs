@@ -1,0 +1,9 @@
+/target
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+python/deepsort_rs/*.pyd
+python/deepsort_rs/*.pdb
+python/deepsort_rs/*.so
