@@ -1,10 +1,16 @@
+mod assignment;
+mod cascade;
 mod kalman;
+mod metrics;
+mod track;
+mod tracker;
 
 use kalman::{Covariance, KalmanFilter as RustKalmanFilter, Measurement, ProjectedCovariance, State};
 use nalgebra::SVector;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use tracker::{Tracker as RustTracker, TrackerParams};
 
 fn vector4_from_numpy(arr: PyReadonlyArray1<'_, f64>) -> PyResult<Measurement> {
     let view = arr.as_array();
@@ -154,9 +160,96 @@ impl PyKalmanFilter {
     }
 }
 
+fn boxes_from_numpy(arr: PyReadonlyArray2<'_, f32>) -> PyResult<Vec<[f64; 4]>> {
+    let view = arr.as_array();
+    if view.shape().len() != 2 || view.shape()[1] != 4 {
+        return Err(PyValueError::new_err("boxes must have shape (N, 4)"));
+    }
+    Ok(view
+        .rows()
+        .into_iter()
+        .map(|r| [r[0] as f64, r[1] as f64, r[2] as f64, r[3] as f64])
+        .collect())
+}
+
+fn embeddings_from_numpy(arr: PyReadonlyArray2<'_, f32>) -> PyResult<Vec<Vec<f64>>> {
+    let view = arr.as_array();
+    Ok(view
+        .rows()
+        .into_iter()
+        .map(|r| r.iter().map(|&v| v as f64).collect())
+        .collect())
+}
+
+/// Tracker DeepSORT complet (Kalman + cascade d'apparence + IoU) exposé à Python.
+#[pyclass(name = "Tracker")]
+struct PyTracker {
+    inner: RustTracker,
+}
+
+#[pymethods]
+impl PyTracker {
+    #[new]
+    #[pyo3(signature = (max_age=30, n_init=3, max_cosine_distance=0.2, nn_budget=100, max_iou_distance=0.7))]
+    fn new(
+        max_age: u32,
+        n_init: u32,
+        max_cosine_distance: f64,
+        nn_budget: Option<usize>,
+        max_iou_distance: f64,
+    ) -> Self {
+        Self {
+            inner: RustTracker::new(TrackerParams {
+                max_age,
+                n_init,
+                max_cosine_distance,
+                nn_budget,
+                max_iou_distance,
+            }),
+        }
+    }
+
+    fn update<'py>(
+        &mut self,
+        py: Python<'py>,
+        boxes: PyReadonlyArray2<'py, f32>,
+        embeddings: PyReadonlyArray2<'py, f32>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let boxes = boxes_from_numpy(boxes)?;
+        let embeddings = embeddings_from_numpy(embeddings)?;
+        if boxes.len() != embeddings.len() {
+            return Err(PyValueError::new_err(
+                "boxes and embeddings must have the same length",
+            ));
+        }
+
+        let tracks = self.inner.update(&boxes, &embeddings);
+        let rows: Vec<Vec<f64>> = tracks
+            .iter()
+            .map(|t| {
+                vec![
+                    t.id as f64,
+                    t.ltrb[0],
+                    t.ltrb[1],
+                    t.ltrb[2],
+                    t.ltrb[3],
+                    t.age as f64,
+                ]
+            })
+            .collect();
+
+        if rows.is_empty() {
+            Ok(PyArray2::zeros(py, [0, 6], false))
+        } else {
+            PyArray2::from_vec2(py, &rows).map_err(|e| PyValueError::new_err(e.to_string()))
+        }
+    }
+}
+
 #[pymodule]
 fn _deepsort_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKalmanFilter>()?;
+    m.add_class::<PyTracker>()?;
     m.add("CHI2_95_4DOF", kalman::CHI2_95_4DOF)?;
     Ok(())
 }
