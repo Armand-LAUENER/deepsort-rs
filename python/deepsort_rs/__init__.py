@@ -13,6 +13,16 @@ class Track:
     track_id: int
     ltrb: np.ndarray
     age: int
+    confirmed: bool
+
+    def is_confirmed(self) -> bool:
+        """Present so a `Track` can stand in for `deep_sort_realtime`'s own
+        track object, whose callers filter on this method."""
+        return self.confirmed
+
+    def to_ltrb(self) -> np.ndarray:
+        """Same reason as `is_confirmed`: mirrors the reference API."""
+        return self.ltrb
 
 
 class Tracker:
@@ -43,6 +53,11 @@ class Tracker:
         embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
         raw = self._inner.update(boxes, embeddings)
         return [
-            Track(track_id=int(row[0]), ltrb=row[1:5], age=int(row[5]))
+            Track(
+                track_id=int(row[0]),
+                ltrb=row[1:5],
+                age=int(row[5]),
+                confirmed=bool(row[6]),
+            )
             for row in raw
         ]

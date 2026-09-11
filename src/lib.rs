@@ -234,12 +234,13 @@ impl PyTracker {
                     t.ltrb[2],
                     t.ltrb[3],
                     t.age as f64,
+                    if t.confirmed { 1.0 } else { 0.0 },
                 ]
             })
             .collect();
 
         if rows.is_empty() {
-            Ok(PyArray2::zeros(py, [0, 6], false))
+            Ok(PyArray2::zeros(py, [0, 7], false))
         } else {
             PyArray2::from_vec2(py, &rows).map_err(|e| PyValueError::new_err(e.to_string()))
         }

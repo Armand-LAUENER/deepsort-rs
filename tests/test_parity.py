@@ -114,6 +114,9 @@ def assert_frame_parity(frame, rust_tracks, ref_tracks):
     for track_id, rust_track in rust_by_id.items():
         ref_track = ref_by_id[track_id]
         assert rust_track.age == ref_track.age, f"frame {frame}, piste {track_id}: age différent"
+        assert rust_track.is_confirmed() == ref_track.is_confirmed(), (
+            f"frame {frame}, piste {track_id}: état de confirmation différent"
+        )
         np.testing.assert_allclose(
             rust_track.ltrb,
             ref_track.to_ltrb(),
