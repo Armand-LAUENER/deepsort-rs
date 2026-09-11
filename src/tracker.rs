@@ -20,6 +20,9 @@ pub struct TrackOutput {
     /// (x1, y1, x2, y2)
     pub ltrb: [f64; 4],
     pub age: u32,
+    /// Miroir de `Track::is_confirmed` : l'appelant en a besoin pour écarter
+    /// les pistes encore tentatives, que `update` renvoie aussi.
+    pub confirmed: bool,
 }
 
 pub struct Tracker {
@@ -99,6 +102,7 @@ impl Tracker {
                 id: t.id,
                 ltrb: to_ltrb(t.to_ltwh()),
                 age: t.age,
+                confirmed: t.is_confirmed(),
             })
             .collect()
     }
