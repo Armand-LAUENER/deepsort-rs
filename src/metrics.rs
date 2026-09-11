@@ -39,22 +39,32 @@ pub fn iou(bbox: [f64; 4], candidates: &[[f64; 4]]) -> Vec<f64> {
         .collect()
 }
 
-/// Distance cosinus (1 - similarité) entre deux vecteurs, avec normalisation explicite.
-pub fn cosine_distance(a: &[f64], b: &[f64]) -> f64 {
-    let norm_a = a.iter().map(|v| v * v).sum::<f64>().sqrt();
-    let norm_b = b.iter().map(|v| v * v).sum::<f64>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 1.0;
+/// Normalise un vecteur à la norme 1 (vecteur nul inchangé).
+pub fn normalize(v: &[f64]) -> Vec<f64> {
+    let norm = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+    if norm == 0.0 {
+        v.to_vec()
+    } else {
+        v.iter().map(|x| x / norm).collect()
     }
-    let dot: f64 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    1.0 - dot / (norm_a * norm_b)
+}
+
+/// Distance cosinus (1 - similarité) entre deux vecteurs déjà normalisés
+/// (norme 1) : simple produit scalaire. Toute feature d'apparence passe par
+/// `normalize()` une seule fois à l'entrée du tracker (`Tracker::update`)
+/// plutôt que d'être renormalisée à chaque paire piste/détection comparée —
+/// un coût quadratique en O(pistes × détections × budget) sinon, visible au
+/// banc du Jalon 4 à haute densité.
+pub fn cosine_distance_normalized(a: &[f64], b: &[f64]) -> f64 {
+    1.0 - a.iter().zip(b).map(|(x, y)| x * y).sum::<f64>()
 }
 
 /// Plus petite distance cosinus entre `query` et un ensemble d'échantillons
-/// observés pour une piste (historique borné par `nn_budget`).
+/// observés pour une piste (historique borné par `nn_budget`). `query` et
+/// `samples` doivent déjà être normalisés.
 pub fn nn_cosine_distance(samples: &[Vec<f64>], query: &[f64]) -> f64 {
     samples
         .iter()
-        .map(|s| cosine_distance(s, query))
+        .map(|s| cosine_distance_normalized(s, query))
         .fold(f64::INFINITY, f64::min)
 }

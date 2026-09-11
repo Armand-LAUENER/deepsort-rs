@@ -1,5 +1,12 @@
 # Changelog
 
+## Jalon 4 (partiel) — Bench vitesse
+
+- `scripts/bench.py` : mesure tracker seul (détections/embeddings pré-calculés, warm-up 50 frames, médiane+p95 sur 500 frames) à 10/50/200 objets/frame, contre `deep_sort_realtime` et `norfair` réellement installés — méthode conforme à `PROJECT.md` §8.
+- Résultats publiés dans `README.md` : `deepsort_rs` de 5,8× à 20,6× plus rapide que `deep_sort_realtime` selon la densité (l'écart se réduit à haute densité car l'assignation Hungarian est O(n³) des deux côtés — plafond algorithmique partagé, documenté tel quel).
+- Bug de méthodologie trouvé et corrigé en cours de route : la distance cosinus (`src/metrics.rs`) renormalisait chaque vecteur à chaque paire comparée au lieu d'une normalisation unique en entrée de frame (coût quadratique inutile, masquait le vrai gain à haute densité).
+- **Non fait** : MOTA/IDF1 (nécessite MOT17, non disponible), gain end-to-end pipeline VisionCam (nécessite le Jalon 3), publication des wheels sur PyPI, CI.
+
 ## Jalon 2 — Tracker complet
 
 - Tracker DeepSORT complet en Rust : `metrics.rs` (IoU, cosinus), `assignment.rs` (Hungarian via `pathfinding::kuhn_munkres_min` + gating chi², padding pour matrices rectangulaires), `cascade.rs` (matching cascade par âge + passage IoU), `track.rs` (cycle de vie tentative/confirmé/supprimé), `tracker.rs` (orchestration par frame, banque de features bornée par `nn_budget`).
