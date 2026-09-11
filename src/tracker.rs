@@ -50,6 +50,12 @@ impl Tracker {
             track.predict(&self.kf);
         }
 
+        // Normalisées une seule fois ici : la distance cosinus dans la
+        // cascade (cascade.rs) suppose des vecteurs à norme 1 et fait un
+        // simple produit scalaire, au lieu de renormaliser à chaque paire.
+        let embeddings: Vec<Vec<f64>> = embeddings.iter().map(|e| crate::metrics::normalize(e)).collect();
+        let embeddings = &embeddings[..];
+
         let ltwh: Vec<[f64; 4]> = boxes_xyxy
             .iter()
             .map(|b| [b[0], b[1], b[2] - b[0], b[3] - b[1]])
