@@ -1,5 +1,30 @@
 # Changelog
 
+## Jalon 3 — Intégration VisionCam
+
+- `confirmed` exposé en 7ᵉ colonne de sortie, et `is_confirmed()` / `to_ltrb()`
+  ajoutés au dataclass `Track` : `update` renvoie aussi les pistes tentatives,
+  que l'appelant doit pouvoir écarter comme il le fait avec la référence.
+- **Correctif de parité** (`src/assignment.rs`) : `min_cost_matching` renvoyait
+  ses non-appariés dans l'ordre croissant des indices, alors que la référence
+  liste d'abord ceux que l'assignation n'a jamais retenus, puis ceux qu'elle a
+  retenus avant de les rejeter sur le seuil de coût. Le tracker crée les
+  nouvelles pistes dans cet ordre : deux `track_id` finissaient intervertis.
+  Invisible sur la séquence synthétique du Jalon 2 (le cas demande, dans un
+  même appel, une détection jamais retenue *et* une rejetée sur le coût), mais
+  visible dès MOT17-04 : 99 frames divergentes sur 300. Couvert par des tests
+  unitaires Rust dans `assignment.rs`.
+- Parité vérifiée sur données réelles via `tools/bench_tracker.py` de VisionCam
+  (YOLOv8-Pose + MobileNetV2) : **0 divergence sur 350 frames** comparées, IDs
+  et boîtes, pistes tentatives comprises, sur MOT17-04 et MOT17-09.
+- Vitesse mesurée sur le chemin d'intégration réel (embedder MobileNetV2
+  inclus, identique des deux côtés) : 24,4 ms → 17,2 ms par frame sur MOT17-04
+  (×1,42), 31,1 ms → 25,9 ms sur MOT17-09 (×1,20). L'embedder domine ce temps,
+  c'est lui qui borne le gain visible dans le pipeline — le ×5,8 à ×20,6 du
+  Jalon 4 porte sur l'association seule.
+- **Non fait** : MOTA/IDF1 (MOT17 avec annotations non disponible), wheels PyPI,
+  CI.
+
 ## Jalon 4 (partiel) — Bench vitesse
 
 - `scripts/bench.py` : mesure tracker seul (détections/embeddings pré-calculés, warm-up 50 frames, médiane+p95 sur 500 frames) à 10/50/200 objets/frame, contre `deep_sort_realtime` et `norfair` réellement installés — méthode conforme à `PROJECT.md` §8.
