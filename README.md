@@ -58,3 +58,7 @@ python -m venv .venv-bench
 .venv-bench/Scripts/python -m maturin develop --release
 .venv-bench/Scripts/python scripts/bench.py
 ```
+
+## Licence
+
+MIT — voir [LICENSE](LICENSE).
