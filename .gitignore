@@ -8,3 +8,4 @@ __pycache__/
 python/deepsort_rs/*.pyd
 python/deepsort_rs/*.pdb
 python/deepsort_rs/*.so
+.idea/
