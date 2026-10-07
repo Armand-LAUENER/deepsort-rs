@@ -61,15 +61,24 @@ impl Tracker {
         // un produit matriciel, au lieu de renormaliser à chaque paire.
         let embeddings = embeddings.normalized();
 
-        let ltwh: Vec<[f64; 4]> = boxes_xyxy
-            .iter()
-            .map(|b| [b[0], b[1], b[2] - b[0], b[3] - b[1]])
-            .collect();
-        let xyah: Vec<Measurement> = ltwh
+        // La référence stocke chaque détection en float32
+        // (`Detection.ltwh = np.asarray(ltwh, dtype=np.float32)`) et calcule
+        // `to_xyah` en float32 : on reproduit ces arrondis, sinon les boîtes
+        // dérivent de quelques ulp f32 par mise à jour (> 1e-4 px sur les
+        // pistes longues à x ≈ 1000).
+        let ltwh32: Vec<[f32; 4]> = boxes_xyxy
             .iter()
             .map(|b| {
-                let aspect = if b[3] > 0.0 { b[2] / b[3] } else { 0.0 };
-                Measurement::from_column_slice(&[b[0] + b[2] / 2.0, b[1] + b[3] / 2.0, aspect, b[3]])
+                let (l, t) = (b[0] as f32, b[1] as f32);
+                [l, t, (b[2] - b[0]) as f32, (b[3] - b[1]) as f32]
+            })
+            .collect();
+        let ltwh: Vec<[f64; 4]> = ltwh32.iter().map(|b| b.map(f64::from)).collect();
+        let xyah: Vec<Measurement> = ltwh32
+            .iter()
+            .map(|&[l, t, w, h]| {
+                let aspect = if h > 0.0 { w / h } else { 0.0 };
+                Measurement::from_iterator([l + w / 2.0, t + h / 2.0, aspect, h].map(f64::from))
             })
             .collect();
 
