@@ -29,14 +29,14 @@ python -m venv .venv
 
 ## Qualité sur MOT17
 
-Protocole « détections publiques » (`tools.eval_mot` de VisionCam) : les deux trackers reçoivent les détections SDP fournies avec MOT17 et les mêmes embeddings MobileNetV2 (1280-d) ; seul le backend d'association change. `nn_budget=100`, séquences complètes, révision `8484623`.
+Protocole « détections publiques » (`tools.eval_mot` de VisionCam) : les deux trackers reçoivent les détections SDP fournies avec MOT17 et les mêmes embeddings MobileNetV2 (1280-d) ; seul le backend d'association change. `nn_budget=100`, séquences complètes, révision `3a98f0f`, une seule exécution par backend.
 
 | Séquence | Backend | MOTA | IDF1 | Changements d'ID | FP | FN | ms/frame (embedder compris) |
 |---|---|---:|---:|---:|---:|---:|---:|
-| MOT17-04-SDP (1050 frames) | **deepsort_rs** | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 29,1 |
-| MOT17-04-SDP | deep_sort_realtime | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 37,8 |
-| MOT17-09-SDP (525 frames) | **deepsort_rs** | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 6,3 |
-| MOT17-09-SDP | deep_sort_realtime | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 8,3 |
+| MOT17-04-SDP (1050 frames) | **deepsort_rs** | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 28,9 |
+| MOT17-04-SDP | deep_sort_realtime | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 48,1 |
+| MOT17-09-SDP (525 frames) | **deepsort_rs** | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 6,5 |
+| MOT17-09-SDP | deep_sort_realtime | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 8,2 |
 
 Qualité strictement identique (critère du §4 de `PROJECT.md` : ±0,5 point). Réserve : `motmetrics` est appliqué sans le pré-traitement officiel de MOTChallenge (zones à ignorer), les valeurs absolues ne sont donc pas comparables au classement en ligne ; la comparaison entre backends, si. Le temps par frame inclut l'embedder sur GPU (RTX 4060), qui domine : c'est lui qui borne le gain visible dans un pipeline complet.
 
