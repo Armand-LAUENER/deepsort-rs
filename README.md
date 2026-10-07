@@ -6,9 +6,15 @@ Tracker DeepSORT (Kalman + association apparence/mouvement + matching cascade) r
 
 ## Statut
 
-- **Jalon 1** (Kalman) et **Jalon 2** (tracker complet) faits, parité validée contre `deep_sort_realtime` réellement installé sur séquences synthétiques (`tests/test_kalman.py`, `tests/test_parity.py`) — voir les limites ci-dessous.
-- **Jalon 4** (bench vitesse) fait pour la partie tracker seul, ci-dessous.
-- Séquence VisionCam + MOT17 (Jalon 0), intégration VisionCam (Jalon 3) et MOTA/IDF1 : **pas encore faits**, hors de portée de cet environnement de développement (pas d'accès à VisionCam ni au jeu de données MOT17).
+- **Jalon 1** (Kalman) : fait. `tests/test_kalman.py` (écart < 1e-5 contre une référence NumPy).
+- **Jalon 2** (tracker complet) : fait. Parité contre `deep_sort_realtime` réellement installé, sur séquence synthétique (`tests/test_parity.py`) et sur données réelles via VisionCam (YOLOv8-Pose + MobileNetV2) : 0 divergence d'ID ou de boîte sur 350 frames de MOT17-04 et MOT17-09, pistes tentatives comprises.
+- **Jalon 3** (intégration VisionCam) : fait. VisionCam utilise `deepsort_rs` via `TRACKER_BACKEND=rust`. Gain mesuré sur le chemin réel, embedder compris, avant l'optimisation de l'association : ×1,42 sur MOT17-04, ×1,20 sur MOT17-09 (l'embedder domine le temps par frame). Le gain après optimisation reste à mesurer côté VisionCam.
+- **Jalon 4** (bench, qualité, publication) : partiel.
+  - Fait : bench vitesse du tracker seul, ci-dessous.
+  - Fait côté VisionCam (`tools.eval_mot`), avant l'optimisation de l'association : sur MOT17-04 (détections publiques), pistes identiques à la référence, MOTA 73,6 %, IDF1 72,3 %, 102 changements d'ID. À remesurer sur la révision actuelle et à reporter ici.
+  - Pas fait : wheels sur PyPI, CI.
+
+Voir `CHANGELOG.md` pour le détail de chaque jalon.
 
 ## Installation (dev)
 
