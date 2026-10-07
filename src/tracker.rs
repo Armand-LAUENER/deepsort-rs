@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::cascade::associate;
 use crate::kalman::{KalmanFilter, Measurement};
+use crate::metrics::FeatureMatrix;
 use crate::track::Track;
 
 pub struct TrackerParams {
@@ -32,7 +33,7 @@ pub struct Tracker {
     /// séparé de `Track::features` pour reproduire exactement la référence :
     /// une piste tentative accumule localement sans jamais alimenter la
     /// banque tant qu'elle n'est pas confirmée.
-    feature_bank: HashMap<u64, Vec<Vec<f64>>>,
+    feature_bank: HashMap<u64, FeatureMatrix>,
     next_id: u64,
     params: TrackerParams,
 }
@@ -48,16 +49,17 @@ impl Tracker {
         }
     }
 
-    pub fn update(&mut self, boxes_xyxy: &[[f64; 4]], embeddings: &[Vec<f64>]) -> Vec<TrackOutput> {
+    /// `embeddings` : une ligne par boîte, dans le même ordre.
+    pub fn update(&mut self, boxes_xyxy: &[[f64; 4]], embeddings: &FeatureMatrix) -> Vec<TrackOutput> {
+        assert_eq!(boxes_xyxy.len(), embeddings.len(), "one embedding per box");
         for track in &mut self.tracks {
             track.predict(&self.kf);
         }
 
         // Normalisées une seule fois ici : la distance cosinus dans la
-        // cascade (cascade.rs) suppose des vecteurs à norme 1 et fait un
-        // simple produit scalaire, au lieu de renormaliser à chaque paire.
-        let embeddings: Vec<Vec<f64>> = embeddings.iter().map(|e| crate::metrics::normalize(e)).collect();
-        let embeddings = &embeddings[..];
+        // cascade (cascade.rs) suppose des vecteurs à norme 1 et se réduit à
+        // un produit matriciel, au lieu de renormaliser à chaque paire.
+        let embeddings = embeddings.normalized();
 
         let ltwh: Vec<[f64; 4]> = boxes_xyxy
             .iter()
@@ -76,7 +78,7 @@ impl Tracker {
             &self.tracks,
             &xyah,
             &ltwh,
-            embeddings,
+            &embeddings,
             &self.feature_bank,
             self.params.max_cosine_distance,
             self.params.max_age,
@@ -84,13 +86,13 @@ impl Tracker {
         );
 
         for (track_idx, det_idx) in result.matches {
-            self.tracks[track_idx].update(&self.kf, &xyah[det_idx], embeddings[det_idx].clone());
+            self.tracks[track_idx].update(&self.kf, &xyah[det_idx], embeddings.row(det_idx));
         }
         for track_idx in result.unmatched_tracks {
             self.tracks[track_idx].mark_missed();
         }
         for det_idx in result.unmatched_detections {
-            self.initiate_track(&xyah[det_idx], embeddings[det_idx].clone());
+            self.initiate_track(&xyah[det_idx], embeddings.row(det_idx));
         }
 
         self.tracks.retain(|t| !t.is_deleted());
@@ -107,7 +109,7 @@ impl Tracker {
             .collect()
     }
 
-    fn initiate_track(&mut self, measurement: &Measurement, feature: Vec<f64>) {
+    fn initiate_track(&mut self, measurement: &Measurement, feature: &[f32]) {
         let (mean, covariance) = self.kf.initiate(measurement);
         self.tracks.push(Track::new(
             self.next_id,
@@ -129,15 +131,16 @@ impl Tracker {
             if !track.is_confirmed() {
                 continue;
             }
-            let entry = self.feature_bank.entry(track.id).or_default();
+            let entry = self
+                .feature_bank
+                .entry(track.id)
+                .or_insert_with(|| FeatureMatrix::new(track.features.dim()));
             entry.append(&mut track.features);
-            if let Some(budget) = self.params.nn_budget
-                && entry.len() > budget
-            {
-                let excess = entry.len() - budget;
-                entry.drain(0..excess);
+            if let Some(budget) = self.params.nn_budget {
+                entry.keep_last(budget);
             }
-            track.features.push(entry.last().expect("au moins une feature").clone());
+            assert!(!entry.is_empty(), "au moins une feature");
+            track.features.push(entry.last());
         }
 
         let active_ids: HashSet<u64> = self

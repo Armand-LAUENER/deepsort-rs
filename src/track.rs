@@ -2,6 +2,7 @@
 //! dans Wojke et al. 2017 (`track.py` de la référence).
 
 use crate::kalman::{Covariance, KalmanFilter, Measurement, State};
+use crate::metrics::FeatureMatrix;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TrackState {
@@ -22,7 +23,7 @@ pub struct Track {
     /// tracker (cf. `Tracker::update`) : non vidées tant que la piste est
     /// tentative, pour reproduire exactement l'ordre d'éviction du budget
     /// de la référence.
-    pub features: Vec<Vec<f64>>,
+    pub features: FeatureMatrix,
     n_init: u32,
     max_age: u32,
 }
@@ -32,10 +33,12 @@ impl Track {
         id: u64,
         mean: State,
         covariance: Covariance,
-        feature: Vec<f64>,
+        feature: &[f32],
         n_init: u32,
         max_age: u32,
     ) -> Self {
+        let mut features = FeatureMatrix::new(feature.len());
+        features.push(feature);
         Self {
             id,
             mean,
@@ -44,7 +47,7 @@ impl Track {
             hits: 1,
             age: 1,
             time_since_update: 0,
-            features: vec![feature],
+            features,
             n_init,
             max_age,
         }
@@ -58,7 +61,7 @@ impl Track {
         self.time_since_update += 1;
     }
 
-    pub fn update(&mut self, kf: &KalmanFilter, measurement: &Measurement, feature: Vec<f64>) {
+    pub fn update(&mut self, kf: &KalmanFilter, measurement: &Measurement, feature: &[f32]) {
         let (mean, covariance) = kf.update(&self.mean, &self.covariance, measurement);
         self.mean = mean;
         self.covariance = covariance;

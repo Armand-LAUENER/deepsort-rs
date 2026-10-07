@@ -1,5 +1,41 @@
 # Changelog
 
+## Perf — association rapide à forte densité
+
+- **Constat** : à 40 personnes/frame (embeddings 512-d, `nn_budget=100`),
+  l'association prenait 48,6 ms contre 11,0 ms pour `deep_sort_realtime`.
+  Le coût venait des distances d'apparence de la cascade : un produit scalaire
+  `f64` par paire (échantillon, détection), réduction séquentielle non
+  vectorisée, sur des `Vec<Vec<f64>>` non contigus.
+- `src/metrics.rs` : `FeatureMatrix`, lignes de features `f32` contiguës,
+  utilisée pour la banque d'apparence (`Tracker::feature_bank`),
+  `Track::features` et la matrice des embeddings de la frame (normalisée une
+  fois, norme accumulée en `f64`).
+- `nn_cosine_costs` : par piste, `C = S · Qᵀ` en un appel
+  `matrixmultiply::sgemm`, puis `cost[j] = 1 - max_i C[i][j]` — même schéma
+  que le produit matriciel numpy de la référence. Nouvelle dépendance directe
+  `matrixmultiply = "0.3"` (déjà présente en transitif via nalgebra).
+- `PyTracker::update` relâche le GIL pendant le calcul (`py.detach`) : deux
+  trackers dans deux threads Python passent de 12,25 s en série à 6,28 s
+  (×1,95).
+- **Parité** : `tests/test_parity.py` vert ; 0 frame à IDs divergents contre
+  `deep_sort_realtime` sur le banc d'association ci-dessous (k = 3, 10, 40).
+  Le passage en `f32` n'a pas nécessité le repli `dgemm`.
+- Banc d'association (300 frames, 512-d, `OPENBLAS_NUM_THREADS=1`, WSL2,
+  release) :
+
+  | Personnes/frame | deep_sort_realtime | avant | après |
+  |---:|---:|---:|---:|
+  | 3 | 0,82 ms | 0,29 ms | 0,12 ms |
+  | 10 | 2,59 ms | 3,15 ms | 0,50 ms |
+  | 40 | 10,97 ms | 48,63 ms | 3,56 ms |
+
+- `scripts/bench.py` (médiane, embeddings 32-d, même machine, avant → après) :
+  10 objets 0,136 → 0,043 ms ; 50 objets 3,270 → 0,427 ms ; 200 objets
+  47,6 → 4,9 ms.
+- **Non fait** : MOT17-04 (`tools.eval_mot`) et 4 caméras, à mesurer côté
+  VisionCam après le bump de révision.
+
 ## Jalon 3 — Intégration VisionCam
 
 - `confirmed` exposé en 7ᵉ colonne de sortie, et `is_confirmed()` / `to_ltrb()`

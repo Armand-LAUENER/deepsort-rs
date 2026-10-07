@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 nalgebra = "0.35"
+matrixmultiply = "0.3"
 pyo3 = { version = "0.29", features = ["extension-module"] }
 numpy = "0.29"
 pathfinding = "4.16.0"

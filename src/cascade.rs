@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::assignment::{gate_cost_matrix, min_cost_matching};
 use crate::kalman::{KalmanFilter, Measurement};
-use crate::metrics::{iou, nn_cosine_distance, INFTY_COST};
+use crate::metrics::{FeatureMatrix, INFTY_COST, iou, nn_cosine_costs};
 use crate::track::Track;
 
 pub struct MatchOutput {
@@ -23,8 +23,8 @@ fn matching_cascade(
     kf: &KalmanFilter,
     tracks: &[Track],
     detections_xyah: &[Measurement],
-    embeddings: &[Vec<f64>],
-    feature_bank: &HashMap<u64, Vec<Vec<f64>>>,
+    embeddings: &FeatureMatrix,
+    feature_bank: &HashMap<u64, FeatureMatrix>,
     max_cosine_distance: f64,
     cascade_depth: u32,
     track_indices: &[usize],
@@ -32,6 +32,7 @@ fn matching_cascade(
 ) -> MatchOutput {
     let mut unmatched_detections = detection_indices.to_vec();
     let mut matches = Vec::new();
+    let mut scratch = Vec::new();
 
     for level in 0..cascade_depth {
         if unmatched_detections.is_empty() {
@@ -47,13 +48,13 @@ fn matching_cascade(
             continue;
         }
 
+        // Embeddings des détections encore libres, rassemblés une fois par
+        // niveau en une matrice contiguë pour le produit matriciel.
+        let queries = embeddings.select_rows(&unmatched_detections);
         let mut cost_matrix: Vec<Vec<f64>> = track_indices_l
             .iter()
             .map(|&t| match feature_bank.get(&tracks[t].id) {
-                Some(samples) => unmatched_detections
-                    .iter()
-                    .map(|&d| nn_cosine_distance(samples, &embeddings[d]))
-                    .collect(),
+                Some(samples) => nn_cosine_costs(samples, &queries, &mut scratch),
                 None => vec![INFTY_COST; unmatched_detections.len()],
             })
             .collect();
@@ -102,8 +103,8 @@ pub fn associate(
     tracks: &[Track],
     detections_xyah: &[Measurement],
     detections_ltwh: &[[f64; 4]],
-    embeddings: &[Vec<f64>],
-    feature_bank: &HashMap<u64, Vec<Vec<f64>>>,
+    embeddings: &FeatureMatrix,
+    feature_bank: &HashMap<u64, FeatureMatrix>,
     max_cosine_distance: f64,
     max_age: u32,
     max_iou_distance: f64,

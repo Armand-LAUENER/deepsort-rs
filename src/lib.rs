@@ -6,6 +6,7 @@ mod track;
 mod tracker;
 
 use kalman::{Covariance, KalmanFilter as RustKalmanFilter, Measurement, ProjectedCovariance, State};
+use metrics::FeatureMatrix;
 use nalgebra::SVector;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
@@ -172,13 +173,17 @@ fn boxes_from_numpy(arr: PyReadonlyArray2<'_, f32>) -> PyResult<Vec<[f64; 4]>> {
         .collect())
 }
 
-fn embeddings_from_numpy(arr: PyReadonlyArray2<'_, f32>) -> PyResult<Vec<Vec<f64>>> {
+fn embeddings_from_numpy(arr: PyReadonlyArray2<'_, f32>) -> PyResult<FeatureMatrix> {
     let view = arr.as_array();
-    Ok(view
-        .rows()
-        .into_iter()
-        .map(|r| r.iter().map(|&v| v as f64).collect())
-        .collect())
+    let (rows, dim) = view.dim();
+    // Copie directe si le tableau est déjà contigu en C (cas du wrapper
+    // Python, qui passe par `np.ascontiguousarray`), sinon parcours ligne
+    // par ligne dans le même ordre.
+    let data = match view.as_slice() {
+        Some(slice) => slice.to_vec(),
+        None => view.iter().copied().collect(),
+    };
+    Ok(FeatureMatrix::from_rows(dim, rows, data))
 }
 
 /// Tracker DeepSORT complet (Kalman + cascade d'apparence + IoU) exposé à Python.
@@ -223,7 +228,10 @@ impl PyTracker {
             ));
         }
 
-        let tracks = self.inner.update(&boxes, &embeddings);
+        // Les entrées sont copiées en mémoire Rust : le calcul n'a plus besoin
+        // du GIL, les autres threads Python (autres caméras) tournent pendant.
+        let inner = &mut self.inner;
+        let tracks = py.detach(|| inner.update(&boxes, &embeddings));
         let rows: Vec<Vec<f64>> = tracks
             .iter()
             .map(|t| {
