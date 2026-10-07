@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: cargo test + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # PyO3 links against libpython for the test binaries.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+
+  parity:
+    name: pytest (parity vs deep_sort_realtime, Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --extra test
+      - run: uv pip install maturin
+      - run: uv run --no-sync maturin develop --release
+      - run: uv run --no-sync pytest tests/ -v
