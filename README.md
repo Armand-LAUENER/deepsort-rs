@@ -1,18 +1,19 @@
 # deepsort-rs
 
-Tracker DeepSORT (Kalman + association apparence/mouvement + matching cascade) réimplémenté en Rust, exposé en Python via PyO3. Voir `PROJECT.md` pour le contexte, l'hypothèse testée et les critères de succès complets.
+[![CI](https://github.com/Armand-LAUENER/deepsort-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Armand-LAUENER/deepsort-rs/actions/workflows/ci.yml)
 
-> Nom de travail — à confirmer avant publication (voir `PROJECT.md` §1).
+Tracker DeepSORT (Kalman + association apparence/mouvement + matching cascade) réimplémenté en Rust, exposé en Python via PyO3. Voir `PROJECT.md` pour le contexte, l'hypothèse testée et les critères de succès complets.
 
 ## Statut
 
 - **Jalon 1** (Kalman) : fait. `tests/test_kalman.py` (écart < 1e-5 contre une référence NumPy).
-- **Jalon 2** (tracker complet) : fait. Parité contre `deep_sort_realtime` réellement installé, sur séquence synthétique (`tests/test_parity.py`) et sur données réelles via VisionCam (YOLOv8-Pose + MobileNetV2) : 0 divergence d'ID ou de boîte sur 350 frames de MOT17-04 et MOT17-09, pistes tentatives comprises.
-- **Jalon 3** (intégration VisionCam) : fait. VisionCam utilise `deepsort_rs` via `TRACKER_BACKEND=rust`. Gain mesuré sur le chemin réel, embedder compris, avant l'optimisation de l'association : ×1,42 sur MOT17-04, ×1,20 sur MOT17-09 (l'embedder domine le temps par frame). Le gain après optimisation reste à mesurer côté VisionCam.
+- **Jalon 2** (tracker complet) : fait. Parité contre `deep_sort_realtime` réellement installé (mêmes IDs, âges, états, boîtes à 1e-4, pistes tentatives comprises), à chaque frame :
+  - sur une séquence synthétique (`tests/test_parity.py`) ;
+  - sur données réelles rejouées depuis le dépôt (`tests/test_parity_mot17.py`) : détections publiques et embeddings MobileNetV2 de MOT17-04 (300 frames) et MOT17-09 (525 frames), voir `tests/fixtures/README.md`.
+- **Jalon 3** (intégration VisionCam) : fait. VisionCam utilise `deepsort_rs` via `TRACKER_BACKEND=rust`, avec un gain de bout en bout mesuré (voir « Qualité sur MOT17 »).
 - **Jalon 4** (bench, qualité, publication) : partiel.
-  - Fait : bench vitesse du tracker seul, ci-dessous.
-  - Fait côté VisionCam (`tools.eval_mot`), avant l'optimisation de l'association : sur MOT17-04 (détections publiques), pistes identiques à la référence, MOTA 73,6 %, IDF1 72,3 %, 102 changements d'ID. À remesurer sur la révision actuelle et à reporter ici.
-  - Pas fait : wheels sur PyPI, CI.
+  - Fait : bench vitesse du tracker seul, MOTA/IDF1 sur MOT17, CI GitHub Actions (tests Rust, clippy, parité Python 3.11 et 3.13).
+  - Pas fait : wheels sur PyPI.
 
 Voir `CHANGELOG.md` pour le détail de chaque jalon.
 
@@ -25,6 +26,19 @@ python -m venv .venv
 .venv/Scripts/pip install -e ".[test]"
 .venv/Scripts/python -m pytest tests/
 ```
+
+## Qualité sur MOT17
+
+Protocole « détections publiques » (`tools.eval_mot` de VisionCam) : les deux trackers reçoivent les détections SDP fournies avec MOT17 et les mêmes embeddings MobileNetV2 (1280-d) ; seul le backend d'association change. `nn_budget=100`, séquences complètes, révision `8484623`.
+
+| Séquence | Backend | MOTA | IDF1 | Changements d'ID | FP | FN | ms/frame (embedder compris) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| MOT17-04-SDP (1050 frames) | **deepsort_rs** | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 29,1 |
+| MOT17-04-SDP | deep_sort_realtime | 73,6 % | 72,3 % | 102 | 3 204 | 9 247 | 37,8 |
+| MOT17-09-SDP (525 frames) | **deepsort_rs** | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 6,3 |
+| MOT17-09-SDP | deep_sort_realtime | 51,6 % | 55,8 % | 44 | 1 301 | 1 230 | 8,3 |
+
+Qualité strictement identique (critère du §4 de `PROJECT.md` : ±0,5 point). Réserve : `motmetrics` est appliqué sans le pré-traitement officiel de MOTChallenge (zones à ignorer), les valeurs absolues ne sont donc pas comparables au classement en ligne ; la comparaison entre backends, si. Le temps par frame inclut l'embedder sur GPU (RTX 4060), qui domine : c'est lui qui borne le gain visible dans un pipeline complet.
 
 ## Benchmark — vitesse du tracker seul
 
@@ -61,7 +75,7 @@ Deux bugs de performance ont été trouvés et corrigés en cours de route : la 
 
 `Tracker.update` relâche le GIL pendant le calcul : plusieurs trackers (une caméra chacun) peuvent tourner en parallèle dans des threads Python.
 
-**Non fait** : MOTA/IDF1 (nécessite MOT17, non disponible ici) et le gain end-to-end sur le pipeline VisionCam complet (nécessite l'intégration du Jalon 3, également non faite). Le chiffre ci-dessus est un speedup **tracker seul**, pas un gain pipeline — `PROJECT.md` §8 est explicite sur le fait que le second sera bien plus faible (loi d'Amdahl).
+Ces chiffres portent sur le **tracker seul**. Dans le pipeline complet, l'embedder domine le temps par frame et le gain visible est bien plus faible (loi d'Amdahl, `PROJECT.md` §8) : voir le tableau « Qualité sur MOT17 » ci-dessus.
 
 Reproduire (nécessite un venv séparé car `norfair` impose `numpy<2.0`, ce qui casserait le venv de dev principal) :
 
@@ -74,4 +88,4 @@ python -m venv .venv-bench
 
 ## Licence
 
-MIT — voir [LICENSE](LICENSE).
+MIT — voir [LICENSE](LICENSE). Exception : les fixtures `tests/fixtures/*.npz`, dérivées de MOT17, restent sous CC BY-NC-SA 3.0 (voir `tests/fixtures/README.md`).

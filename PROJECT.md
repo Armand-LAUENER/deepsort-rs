@@ -1,6 +1,6 @@
 # deepsort-rs — Tracker multi-objets DeepSORT en Rust avec bindings Python
 
-> Nom de travail. À remplacer avant publication (vérifier la disponibilité sur crates.io et PyPI).
+> Nom retenu : `deepsort-rs`, libre sur crates.io et PyPI (vérifié le 2026-10-07).
 
 ## 1. Résumé
 

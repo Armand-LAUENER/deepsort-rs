@@ -1,5 +1,30 @@
 # Changelog
 
+## Parité MOT17 dans le dépôt, qualité MOT17, CI
+
+- **Correctif de parité** (`src/tracker.rs`) : `deep_sort_realtime` stocke
+  chaque détection en float32 (`Detection.ltwh`) et calcule `to_xyah` en
+  float32 ; le tracker Rust calculait la mesure en f64. Écart de 2 à 3 ulp f32
+  par mise à jour, qui dépassait la tolérance de 1e-4 px sur les pistes longues
+  à grandes coordonnées (1,7e-4 px vers x ≈ 650 à la frame 150 de MOT17-09).
+  Antérieur au passage à `sgemm` (même écart, au chiffre près, avec le binaire
+  de `d894462`), invisible sur la scène synthétique à petites coordonnées. Le
+  tracker reproduit désormais ces arrondis.
+- `tests/test_parity_mot17.py` + `tests/fixtures/` : parité frame par frame
+  (IDs, âge, état, boîtes à 1e-4, pistes tentatives comprises) sur les
+  détections publiques et embeddings MobileNetV2 de MOT17-04 (300 frames) et
+  MOT17-09 (525 frames), avec `(max_age, n_init)` = (30, 3) et (5, 2).
+  Embeddings projetés en 128-d float16 pour la taille du dépôt (3,4 Mo) ;
+  fixtures sous CC BY-NC-SA 3.0 comme MOT17. Générées par
+  `scripts/record_fixture.py`.
+- MOTA/IDF1 publiés dans le README (`tools.eval_mot` de VisionCam, révision
+  `8484623`) : identiques à la référence sur MOT17-04 (73,6 % / 72,3 %, 102
+  changements d'ID) et MOT17-09 (51,6 % / 55,8 %, 44).
+- CI GitHub Actions : `cargo test`, `cargo clippy -D warnings`, et `pytest`
+  (parité) sous Python 3.11 et 3.13.
+- Nom `deepsort-rs` retenu, libre sur crates.io et PyPI.
+- **Non fait** : wheels PyPI.
+
 ## Perf — association rapide à forte densité
 
 - **Constat** : à 40 personnes/frame (embeddings 512-d, `nn_budget=100`),
