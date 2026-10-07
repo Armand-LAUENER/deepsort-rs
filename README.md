@@ -30,23 +30,30 @@ Méthode (voir `scripts/bench.py`, conforme à `PROJECT.md` §8) :
 - Trois densités : 10, 50, 200 objets/frame, trajectoires synthétiques à vitesse constante bruitée.
 - Une seule machine, une seule exécution par densité (pas de moyenne sur plusieurs runs) — à prendre comme ordre de grandeur, pas comme mesure de production.
 
-**Machine** : Intel Core i7-1360P, Windows, Python 3.11.9, rustc 1.98.1, build `--release`.
+**Machine** : AMD Ryzen 5 7600X, WSL2 Ubuntu 24.04, Python 3.13, rustc 1.98.1, build `--release`.
 
 | Densité | Candidat | Médiane (ms) | p95 (ms) | Speedup vs `deepsort_rs` |
 |---|---|---:|---:|---:|
-| 10 | **deepsort_rs** | 0.463 | 0.701 | 1.0× |
-| 10 | deep_sort_realtime | 9.551 | 12.157 | 20.6× plus lent |
-| 10 | norfair (IoU seul) | 2.721 | 4.050 | 5.9× plus lent |
-| 50 | **deepsort_rs** | 7.990 | 11.630 | 1.0× |
-| 50 | deep_sort_realtime | 50.887 | 63.531 | 6.4× plus lent |
-| 50 | norfair (IoU seul) | 14.103 | 18.034 | 1.8× plus lent |
-| 200 | **deepsort_rs** | 83.892 | 141.349 | 1.0× |
-| 200 | deep_sort_realtime | 489.132 | 2952.057 | 5.8× plus lent |
-| 200 | norfair (IoU seul) | 86.098 | 121.011 | ~1.0× (équivalent) |
+| 10 | **deepsort_rs** | 0.043 | 0.065 | 1.0× |
+| 10 | deep_sort_realtime | 1.865 | 4.712 | 43.2× plus lent |
+| 10 | norfair (IoU seul) | 0.539 | 1.006 | 12.5× plus lent |
+| 50 | **deepsort_rs** | 0.427 | 0.613 | 1.0× |
+| 50 | deep_sort_realtime | 34.772 | 384.056 | 81.4× plus lent |
+| 50 | norfair (IoU seul) | 2.996 | 7.620 | 7.0× plus lent |
+| 200 | **deepsort_rs** | 4.913 | 8.892 | 1.0× |
+| 200 | deep_sort_realtime | 167.650 | 573.175 | 34.1× plus lent |
+| 200 | norfair (IoU seul) | 11.924 | 20.240 | 2.4× plus lent |
 
-**Lecture honnête** : le gain contre `deep_sort_realtime` (la vraie cible de parité) va de 20,6× à 10 objets à 5,8× à 200 objets — l'avantage se réduit avec la densité parce que l'assignation Hungarian est O(n³) des deux côtés, un plafond algorithmique partagé, pas un problème d'implémentation. À 200 objets, `deepsort_rs` rejoint `norfair` (qui ne fait pourtant pas de matching par apparence) : l'écart au bas de la fourchette « 10-50× » de l'hypothèse §3 de `PROJECT.md` n'est donc pas atteint à haute densité — à documenter tel quel plutôt qu'à enjoliver. Le p95 de `deep_sort_realtime` à 200 objets (2952 ms, très supérieur à sa médiane) suggère une forte variance côté référence à cette densité, non creusée ici.
+**Lecture honnête** :
 
-Un bug de méthodologie a été trouvé et corrigé en cours de route : la distance cosinus renormalisait chaque vecteur à chaque paire piste/détection comparée au lieu d'une normalisation unique en entrée de frame — coût quadratique inutile qui faisait apparaître `deepsort_rs` plus lent que `deep_sort_realtime` à 200 objets avant correction (`src/metrics.rs`, `normalize()` appelée une fois dans `Tracker::update`).
+- Le gain contre `deep_sort_realtime` va de 34× à 81× selon la densité. Le p95 de la référence est très supérieur à sa médiane (variance côté Python, non creusée), et il s'agit d'une seule exécution par densité : ce sont des ordres de grandeur.
+- `scripts/bench.py` utilise des embeddings de dimension 32, ce qui sous-estime le poids des distances d'apparence. Avec des embeddings réalistes de dimension 512 (banc d'association décrit dans `CHANGELOG.md`, 300 frames, `OPENBLAS_NUM_THREADS=1`), l'écart est plus modeste : 0,12 ms contre 0,82 ms à 3 personnes, 3,56 ms contre 10,97 ms à 40 personnes (×3,1).
+- Une version précédente de ce README attribuait le recul du gain à haute densité à l'assignation Hungarian en O(n³). C'était faux : le goulot était le calcul des distances cosinus (un produit scalaire `f64` séquentiel par paire, sur des `Vec<Vec<f64>>`). Depuis le passage à des matrices `f32` contiguës et à un produit matriciel `sgemm` par piste (`src/metrics.rs`, `nn_cosine_costs`), `deepsort_rs` passe de 47,6 ms à 4,9 ms de médiane à 200 objets sur cette machine, et reste devant `norfair` à toutes les densités.
+- Les chiffres de la version précédente (Intel Core i7-1360P, Windows) ne sont pas comparables directement à ceux-ci : machine différente.
+
+Deux bugs de performance ont été trouvés et corrigés en cours de route : la distance cosinus renormalisait d'abord chaque vecteur à chaque paire comparée (corrigé par une normalisation unique en entrée de frame), puis les distances d'apparence restaient calculées paire par paire, sans vectorisation (corrigé par le produit matriciel ci-dessus).
+
+`Tracker.update` relâche le GIL pendant le calcul : plusieurs trackers (une caméra chacun) peuvent tourner en parallèle dans des threads Python.
 
 **Non fait** : MOTA/IDF1 (nécessite MOT17, non disponible ici) et le gain end-to-end sur le pipeline VisionCam complet (nécessite l'intégration du Jalon 3, également non faite). Le chiffre ci-dessus est un speedup **tracker seul**, pas un gain pipeline — `PROJECT.md` §8 est explicite sur le fait que le second sera bien plus faible (loi d'Amdahl).
 
