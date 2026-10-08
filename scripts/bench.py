@@ -9,6 +9,15 @@ chronométrée), comme l'exige §8.
 `numpy<2.0`, ce qui downgraderait le venv de dev principal (`.venv`) utilisé
 par `pytest` — utiliser un venv séparé (voir README, section Benchmark) :
 
+Linux / macOS :
+
+    uv venv .venv-bench
+    uv pip install --python .venv-bench maturin deep_sort_realtime norfair
+    VIRTUAL_ENV=$PWD/.venv-bench .venv-bench/bin/maturin develop --release
+    .venv-bench/bin/python scripts/bench.py
+
+Windows :
+
     python -m venv .venv-bench
     .venv-bench/Scripts/python -m pip install maturin deep_sort_realtime norfair
     .venv-bench/Scripts/python -m maturin develop --release

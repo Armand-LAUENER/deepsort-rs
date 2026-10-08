@@ -19,7 +19,24 @@ Voir `CHANGELOG.md` pour le détail de chaque jalon.
 
 ## Installation (dev)
 
+Prérequis : Rust stable ([rustup](https://rustup.rs)) et [uv](https://docs.astral.sh/uv/). Pas encore de wheels sur PyPI : le module se compile depuis les sources.
+
+Linux / macOS (mêmes commandes que la CI) :
+
 ```bash
+git clone https://github.com/Armand-LAUENER/deepsort-rs.git && cd deepsort-rs
+uv sync --locked --extra test          # venv .venv + dépendances de test, depuis uv.lock
+uv pip install maturin
+uv run --no-sync maturin develop --release
+uv run --no-sync pytest tests/
+cargo test && cargo clippy --all-targets -- -D warnings
+```
+
+Après toute modification Rust, relancer `maturin develop --release` avant `pytest`, sinon les tests tournent sur l'ancien binaire. Si `cargo` est introuvable dans un shell non interactif : `. ~/.cargo/env`.
+
+Windows (PowerShell) :
+
+```powershell
 python -m venv .venv
 .venv/Scripts/pip install maturin
 .venv/Scripts/python -m maturin develop --release
@@ -80,11 +97,13 @@ Ces chiffres portent sur le **tracker seul**. Dans le pipeline complet, l'embedd
 Reproduire (nécessite un venv séparé car `norfair` impose `numpy<2.0`, ce qui casserait le venv de dev principal) :
 
 ```bash
-python -m venv .venv-bench
-.venv-bench/Scripts/pip install maturin deep_sort_realtime norfair
-.venv-bench/Scripts/python -m maturin develop --release
-.venv-bench/Scripts/python scripts/bench.py
+uv venv .venv-bench
+uv pip install --python .venv-bench maturin deep_sort_realtime norfair
+VIRTUAL_ENV=$PWD/.venv-bench .venv-bench/bin/maturin develop --release
+.venv-bench/bin/python scripts/bench.py
 ```
+
+Sous Windows : `python -m venv .venv-bench`, puis les mêmes étapes avec `.venv-bench/Scripts/pip` et `.venv-bench/Scripts/python`.
 
 ## Licence
 
