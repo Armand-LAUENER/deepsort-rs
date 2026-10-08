@@ -19,7 +19,8 @@
   `scripts/record_fixture.py`.
 - MOTA/IDF1 publiés dans le README (`tools.eval_mot` de VisionCam, révision
   `8484623`) : identiques à la référence sur MOT17-04 (73,6 % / 72,3 %, 102
-  changements d'ID) et MOT17-09 (51,6 % / 55,8 %, 44).
+  changements d'ID) et MOT17-09 (51,6 % / 55,8 %, 44). Mêmes valeurs sur
+  `3a98f0f`, après le correctif float32 (VisionCam `4be4436`).
 - CI GitHub Actions : `cargo test`, `cargo clippy -D warnings`, et `pytest`
   (parité) sous Python 3.11 et 3.13.
 - Nom `deepsort-rs` retenu, libre sur crates.io et PyPI.
